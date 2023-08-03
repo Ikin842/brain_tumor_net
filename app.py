@@ -8,9 +8,6 @@ import os
 
 app = Flask(__name__)
 
-import torch
-import torch.nn as nn
-
 
 class BrainTumorNet(nn.Module):
     def __init__(self, num_classes):
@@ -41,6 +38,17 @@ class BrainTumorNet(nn.Module):
         x = x.view(x.size(0), -1)
         x = self.classifier(x)
         return x
+    
+checkpoint_path = 'checkpoint.pt'
+config = {
+    'num_classes' : 4
+}
+
+model = BrainTumorNet(config['num_classes'])
+checkpoint = torch.load(checkpoint_path,  map_location=torch.device('cpu'))
+model.load_state_dict(checkpoint['model_state_dict'], strict=False)
+model = model.to('cpu')
+model.eval()
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
@@ -52,11 +60,6 @@ def image_transform(image):
     if image.mode != 'RGB':
         image = image.convert('RGB')
 
-    # transform = transforms.Compose([
-    #     transforms.Resize((224, 224)),  # Ubah ukuran gambar menjadi 224x224
-    #     transforms.ToTensor(),
-    #     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    # ])
 
     transform = transforms.Compose([
             transforms.Resize(256),  # Resize gambar menjadi ukuran 256x256
@@ -84,7 +87,7 @@ def api():
 
         if image and allowed_file(image.filename):
             image_arr = Image.open(image)
-            image_arr = image_transform(image_arr).unsqueeze(0).to(device)
+            image_arr = image_transform(image_arr).unsqueeze(0).to('cpu')
             print("Model predicting ...")
             
             with torch.no_grad():
@@ -113,7 +116,7 @@ def predict():
 
             if image and allowed_file(image.filename):
                 image_arr = Image.open(image)
-                image_arr = image_transform(image_arr).unsqueeze(0).to(device)
+                image_arr = image_transform(image_arr).unsqueeze(0).to('cpu')
                 print("Predicting ...")
                 with torch.no_grad():
                     output = model(image_arr)
@@ -125,7 +128,7 @@ def predict():
                 ind = torch.argmax(probabilities).item()
                 prediction = classes[ind]
 
-                return render_template('index.html', prediction=prediction, probability=pneumonia_percentage, image='/style/IMG/', appName="Pneumonia Detection")
+                return render_template('index.html', prediction=prediction, probability=pneumonia_percentage, image='/static/IMG/', appName="Pneumonia Detection")
             else:
                 return render_template('index.html', appName="Pneumonia Detection")
         except:
@@ -134,17 +137,6 @@ def predict():
         return render_template('index.html', appName="Pneumonia Detection")
 
 if __name__ == '__main__':
-    checkpoint_path = 'checkpoint.pt'
-    config = {
-        'num_classes' : 4
-    }
 
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
-    model = BrainTumorNet(config['num_classes'])
-    checkpoint = torch.load(checkpoint_path,  map_location=torch.device('cpu'))
-    model.load_state_dict(checkpoint['model_state_dict'], strict=False)
-    model = model.to(device)
-    model.eval()
 
     app.run(debug=True)
